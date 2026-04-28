@@ -1,0 +1,94 @@
+VERSION ""
+
+
+NS_ :
+    NS_DESC_
+    CM_
+    BA_DEF_
+    BA_
+    VAL_
+    CAT_DEF_
+    CAT_
+    FILTER
+    BA_DEF_DEF_
+    EV_DATA_
+    ENVVAR_DATA_
+    SGTYPE_
+    SGTYPE_VAL_
+    BA_DEF_SGTYPE_
+    BA_SGTYPE_
+    SIG_TYPE_REF_
+    VAL_TABLE_
+    SIG_GROUP_
+    SIG_VALTYPE_
+    SIGTYPE_VALTYPE_
+    BO_TX_BU_
+    BA_DEF_REL_
+    BA_REL_
+    BA_DEF_DEF_REL_
+    BU_SG_REL_
+    BU_EV_REL_
+    BU_BO_REL_
+    SG_MUL_VAL_
+
+BS_: 
+BU_: TestECU ClusterECU 
+BO_ 2147483904 DrivetrainStatus: 8 TestECU
+   SG_ Speed_kmh : 0|16@1+ (0.1,0) [0|250] "km/h" ClusterECU
+   SG_ EngineRPM : 16|16@1+ (0.25,0) [0|8000] "rpm" ClusterECU
+   SG_ Gear : 32|16@1+ (1,0) [0|4096] "-" ClusterECU
+   SG_ ThrottlePos : 48|8@1+ (0.4,0) [0|100] "%" ClusterECU
+
+BO_ 2147483905 EngineHealth: 8 TestECU
+   SG_ CoolantTemp : 0|8@1+ (1,-40) [-40|120] "degC" ClusterECU
+   SG_ OilPressure : 8|8@1+ (0.1,0) [0|10] "bar" ClusterECU
+   SG_ BatteryVoltage : 16|8@1+ (0.1,0) [0|15] "V" ClusterECU
+   SG_ EngineLoad : 24|8@1+ (0.4,0) [0|100] "%" ClusterECU
+
+BO_ 2147483906 FuelRange: 8 TestECU
+   SG_ FuelLevel_pct : 0|8@1+ (0.4,0) [0|100] "%" ClusterECU
+   SG_ Range_km : 8|16@1+ (1,0) [0|800] "km" ClusterECU
+
+BO_ 2147483907 VehicleStatus: 8 TestECU
+   SG_ TurnLeft : 0|1@1+ (1,0) [0|1] "" ClusterECU
+   SG_ TurnRight : 1|1@1+ (1,0) [0|1] "" ClusterECU
+   SG_ HandBrake : 2|1@1+ (1,0) [0|1] "" ClusterECU
+   SG_ DoorOpen_RF : 3|1@1+ (1,0) [0|1] "" ClusterECU
+   SG_ DoorOpen_LF : 4|1@1+ (1,0) [0|1] "" ClusterECU
+   SG_ DoorOpen_RR : 5|1@1+ (1,0) [0|1] "" ClusterECU
+   SG_ DoorOpen_LR : 6|1@1+ (1,0) [0|1] "" ClusterECU
+   SG_ DoorOpen_Bonnet : 7|1@1+ (1,0) [0|1] "" ClusterECU
+   SG_ DoorOpen_Boot : 8|1@1+ (1,0) [0|1] "" ClusterECU
+   SG_ DoorOpen_Top : 9|1@1+ (1,0) [0|1] "" ClusterECU
+   SG_ CheckEngine : 10|1@1+ (1,0) [0|1] "" ClusterECU
+   SG_ LowFuel : 11|1@1+ (1,0) [0|1] "" ClusterECU
+   SG_ SeatBelt : 12|1@1+ (1,0) [0|1] "" ClusterECU
+   SG_ HighBeam : 13|1@1+ (1,0) [0|1] "" ClusterECU
+
+CM_ BO_ 2147483904 "From PowertrainECU";
+CM_ BO_ 2147483905 "From PowertrainECU";
+CM_ BO_ 2147483906 "From BodyECU";
+CM_ BO_ 2147483907 "From BodyECU";
+BA_DEF_ BO_ "GenMsgBackgroundColor" STRING ;
+BA_DEF_ BO_ "GenMsgForegroundColor" STRING ;
+BA_DEF_ BO_ "matchingcriteria" INT 0 0;
+BA_DEF_ BO_ "filterlabeling" INT 0 0;
+BA_DEF_DEF_ "GenMsgBackgroundColor" "#ffffff";
+BA_DEF_DEF_ "GenMsgForegroundColor" "#000000";
+BA_DEF_DEF_ "matchingcriteria" 0;
+BA_DEF_DEF_ "filterlabeling" 1;
+VAL_ 2147483904 Gear 0 "UNKNOWN" 1 "NEUTRAL" 2 "REVERSE" 4 "PARK" 8 "DRIVE" 16 "GEAR_1" 32 "GEAR_2" 64 "GEAR_3" 128 "GEAR_4" 256 "GEAR_5" 512 "GEAR_6" 1024 "GEAR_7" 2048 "GEAR_8" 4096 "GEAR_9";
+VAL_ 2147483907 TurnLeft 0 "OFF" 1 "ON";
+VAL_ 2147483907 TurnRight 0 "OFF" 1 "ON";
+VAL_ 2147483907 HandBrake 0 "OFF" 1 "ON";
+VAL_ 2147483907 DoorOpen_RF 0 "CLOSED" 1 "OPEN";
+VAL_ 2147483907 DoorOpen_LF 0 "CLOSED" 1 "OPEN";
+VAL_ 2147483907 DoorOpen_RR 0 "CLOSED" 1 "OPEN";
+VAL_ 2147483907 DoorOpen_LR 0 "CLOSED" 1 "OPEN";
+VAL_ 2147483907 DoorOpen_Bonnet 0 "CLOSED" 1 "OPEN";
+VAL_ 2147483907 DoorOpen_Boot 0 "CLOSED" 1 "OPEN";
+VAL_ 2147483907 DoorOpen_Top 0 "CLOSED" 1 "OPEN";
+VAL_ 2147483907 CheckEngine 0 "OK" 1 "WARN";
+VAL_ 2147483907 LowFuel 0 "OK" 1 "WARN";
+VAL_ 2147483907 SeatBelt 0 "OK" 1 "WARN";
+VAL_ 2147483907 HighBeam 0 "OK" 1 "WARN";
