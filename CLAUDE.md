@@ -24,7 +24,6 @@ AutoNET/
 │   └── CAN/
 │       └── AutoNET.dbc              # CAN database — all message frames & signals
 └── scripts/
-    ├── can-setup.sh                 # Create a single vcan0 interface
     ├── can-bridge.py                # Full bridge: vcan0/1 <=> Canalyst-II CAN1/2
     └── can-test.py                  # Interactive tool: bridge + direct device send/monitor
 ```
@@ -97,11 +96,12 @@ sudo modprobe vcan
 ### Bring up virtual CAN
 
 ```bash
-bash scripts/can-setup.sh          # creates vcan0
-# Or manually:
 sudo modprobe vcan
 sudo ip link add dev vcan0 type vcan && sudo ip link set up vcan0
+sudo ip link add dev vcan1 type vcan && sudo ip link set up vcan1
 ```
+
+Or let `can-bridge.py` create and bridge both interfaces automatically:
 
 ### Bridge to Canalyst-II hardware
 
@@ -206,8 +206,7 @@ Load DBC: **DBC Files → Load DBC File → networks/CAN/AutoNET.dbc**
 ## Workflow Summary
 
 ```
-1. sudo bash scripts/can-setup.sh          # bring up vcan0
-2. python3 scripts/can-bridge.py           # (optional) bridge to real hardware
+1. python3 scripts/can-bridge.py           # brings up vcan0/vcan1 and bridges to hardware
 3. ./SavvyCAN.AppImage                     # open GUI, connect to vcan0, load AutoNET.dbc
 4. cansend vcan0 00000040#...              # inject test frames
    candump vcan0                           # monitor traffic

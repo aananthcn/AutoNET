@@ -24,9 +24,8 @@ AutoNET/
 │   └── CAN/
 │       └── AutoNET.dbc          # CAN database — all message frames & signals
 └── scripts/
-    ├── can-setup.sh             # Create a single vcan0 interface
     ├── can-bridge.py            # Full bridge: vcan0/1 <=> Canalyst-II CAN1/2
-    └── can-test.py              # Simple one-way bridge (hardware → vcan0)
+    └── can-test.py              # Interactive tool: bridge + direct device send/monitor
 ```
 
 ---
@@ -108,25 +107,32 @@ Signal values now decode automatically in the **Received Frames** and **Graph** 
 
 ## Virtual CAN Nodes
 
-### Create a single vcan0 node
+Virtual CAN interfaces (`vcan0`, `vcan1`, …) are software loopback nodes that mirror the physical channels of a hardware CAN adapter. Each vcan interface maps one-to-one to a hardware channel:
+
+```
+vcan0  <──────────────>  CAN1  (e.g. Waveshare USB-CAN-B ch1 / Canalyst-II ch0)
+vcan1  <──────────────>  CAN2  (e.g. Waveshare USB-CAN-B ch2 / Canalyst-II ch1)
+```
+
+This mapping is what `can-bridge.py` implements — it creates and bridges both interfaces automatically. Tools like SavvyCAN, CANgaroo, and `candump` connect to `vcan0`/`vcan1` and transparently see traffic from the physical bus.
+
+### Create vcan0 and vcan1 (with hardware bridge)
+
+The easiest way is to run the bridge script, which creates both interfaces and starts bridging immediately:
+
+```bash
+python3 scripts/can-bridge.py      # creates vcan0/vcan1 and bridges to Canalyst-II CAN1/CAN2
+```
+
+### Create interfaces manually (without hardware)
+
+Use this when you want virtual nodes for software-only testing (no hardware adapter needed):
 
 ```bash
 sudo modprobe vcan
-sudo ip link add dev vcan0 type vcan
-sudo ip link set up vcan0
-```
 
-Or use the provided script:
-
-```bash
-bash scripts/can-setup.sh
-```
-
-### Create additional nodes (vcan1, vcan2 …)
-
-```bash
-sudo ip link add dev vcan1 type vcan && sudo ip link set up vcan1
-sudo ip link add dev vcan2 type vcan && sudo ip link set up vcan2
+sudo ip link add dev vcan0 type vcan && sudo ip link set up vcan0   # mirrors CAN1
+sudo ip link add dev vcan1 type vcan && sudo ip link set up vcan1   # mirrors CAN2
 ```
 
 ### Verify
@@ -135,10 +141,13 @@ sudo ip link add dev vcan2 type vcan && sudo ip link set up vcan2
 ip link show type vcan
 ```
 
+Both interfaces should appear as `UP,RUNNING`.
+
 ### Tear down
 
 ```bash
 sudo ip link set down vcan0 && sudo ip link delete vcan0
+sudo ip link set down vcan1 && sudo ip link delete vcan1
 ```
 
 ---

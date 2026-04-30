@@ -149,9 +149,12 @@ Isolated dual-channel CAN expansion board for Raspberry Pi. Uses two MCP2515 SPI
 
 ### Compatibility
 
-Raspberry Pi Zero / Zero W / Zero WH / 2B / 3B / 3B+ / 4B / 5.
+Raspberry Pi Zero / Zero W / Zero WH / 2B / 3B / 3B+ / 4B.
 
-> When fitting on a Pi 2B/3B/4B/5, use copper standoffs to prevent the CAN terminal block from contacting the HDMI port and causing a short circuit.
+> **Raspberry Pi 5 — NOT supported in default SPI1 configuration.**
+> Pi 5 uses a new RP1 I/O chip that breaks SPI1 (auxiliary) compatibility. The `spi1-3cs` + MCP2515 overlay fails with `MCP251x didn't enter in conf mode after reset` (error -110). SPI0 works on Pi 5 but requires pad rework on the HAT to reroute the SPI signals — see the SPI Pin Mapping table. Use the **Waveshare USB-CAN-B** as a drop-in alternative on Pi 5 (plug-and-play via `gs_usb`, no configuration needed).
+
+> When fitting on a Pi 2B/3B/4B, use copper standoffs to prevent the CAN terminal block from contacting the HDMI port and causing a short circuit.
 
 ### Specifications
 
@@ -213,8 +216,7 @@ ls /dev/spidev*
 
 ```bash
 sudo apt update
-sudo apt install -y can-utils
-sudo pip3 install RPi.GPIO spidev python-can
+sudo apt install -y can-utils python3-rpi.gpio python3-spidev python3-can
 ```
 
 #### Step 4 — Configure the device tree overlay
@@ -227,7 +229,7 @@ Edit the boot config. The path depends on your OS version:
 | Raspberry Pi OS (≥ 2023) / Pi 5 | `/boot/firmware/config.txt` |
 
 ```bash
-sudo nano /boot/firmware/config.txt   # adjust path for your OS
+sudo vi /boot/firmware/config.txt   # adjust path for your OS
 ```
 
 Add at the end of the file:
@@ -315,12 +317,33 @@ sudo modprobe spi_bcm2835
 sudo modprobe spidev
 ```
 
+#### MCP2515 probe fails on Raspberry Pi 5 (`err=110`)
+
+```
+mcp251x spi1.2: MCP251x didn't enter in conf mode after reset
+mcp251x spi1.2: Probe failed, err=110
+```
+
+This is a Pi 5 incompatibility. The RP1 I/O chip on Pi 5 breaks SPI1 (auxiliary) — the `spi1-3cs` overlay loads but MCP2515 SPI communication times out. There is no software fix; options are:
+
+- **Pad rework** — resolder the 0 Ω SPI selection pads on the HAT to route SPI0 instead of SPI1, then update `config.txt` to use `spi0-2cs` and `spi0-0`/`spi0-1` CS entries.
+- **Switch to Waveshare USB-CAN-B** — works on Pi 5 out of the box via `gs_usb`.
+- **Use a Pi 4B or earlier** — SPI1 + MCP2515 is fully supported on all pre-Pi 5 models.
+
+To confirm this is the cause:
+
+```bash
+cat /proc/device-tree/model     # will show "Raspberry Pi 5" if affected
+pinctrl get 13,22               # GPIO13 (INT_1) will show lo if MCP2515 stuck
+```
+
 #### Common error messages
 
 | Error | Likely cause |
 |---|---|
 | `Cannot find device can0` | Overlay not applied or MCP2515 not detected |
 | `spi transfer failed` | HAT not seated properly or wrong SPI bus |
+| `mcp251x spi1.x: probe failed, err=110` | Pi 5 SPI1 incompatibility — see above |
 | `mcp251x spi0.0: probe failed` | Wrong oscillator or interrupt pin in config |
 | `/dev/spidev*` missing | SPI not enabled in raspi-config |
 
@@ -335,6 +358,7 @@ sudo modprobe spidev
 | Isolation | 2500 VDC (full 3-terminal) | Power + signal isolation |
 | Linux interface | SocketCAN (`can0`/`can1`) | SocketCAN (`can0`/`can1`) |
 | Driver needed | None (gs_usb in kernel) | Device tree overlay (built-in kernel driver) |
+| Raspberry Pi 5 | ✓ Works (gs_usb, plug-and-play) | ✗ SPI1 broken on Pi 5 — pad rework needed for SPI0 |
 | Windows tool | USB-CAN TOOL V9.14 GUI | None (Linux only) |
 | Bitrate range | 10 Kbps – 1 Mbps | Up to 1 Mbps (MCP2515 limit) |
 | Best use | Desktop / laptop development host | Embedded Pi node on the vehicle bus |

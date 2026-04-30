@@ -9,16 +9,16 @@ from canalystii import CanalystDevice, Message as HWMessage
 
 BITRATE = 500000
 
-def ensure_vcan0():
-    result = subprocess.run(["ip", "link", "show", "vcan0"], capture_output=True)
+def ensure_vcan(name):
+    result = subprocess.run(["ip", "link", "show", name], capture_output=True)
     if result.returncode != 0:
-        print("vcan0 not found — creating it now...")
+        print(f"{name} not found — creating it now...")
         subprocess.run(["sudo", "modprobe", "vcan"], check=True)
-        subprocess.run(["sudo", "ip", "link", "add", "dev", "vcan0", "type", "vcan"], check=True)
-        subprocess.run(["sudo", "ip", "link", "set", "up", "vcan0"], check=True)
-        print("vcan0 created and brought up.")
+        subprocess.run(["sudo", "ip", "link", "add", "dev", name, "type", "vcan"], check=True)
+        subprocess.run(["sudo", "ip", "link", "set", "up", name], check=True)
+        print(f"{name} created and brought up.")
     else:
-        print("vcan0 already exists, skipping setup.")
+        print(f"{name} already exists, skipping setup.")
 
 def str_to_hw_msg(frame_str):
     if '#' not in frame_str:
@@ -38,11 +38,11 @@ def str_to_hw_msg(frame_str):
 def print_help():
     print()
     print("=" * 60)
-    print("  CAN Test: Canalyst-II CAN1 --> vcan0  [running]")
+    print("  CAN Test: CAN1 <-> vcan0  |  CAN2 <-> vcan1  [running]")
     print("=" * 60)
-    print("  Bridge commands (via vcan0):")
-    print("    m -b           monitor vcan0 (Ctrl+C to return here)")
-    print("    s -b <frame>   send a frame to vcan0, e.g.:")
+    print("  Bridge commands:")
+    print("    m -b <1|2>     monitor vcan0 (CAN1) or vcan1 (CAN2)")
+    print("    s -b <frame>   send a frame to vcan0 (CAN1), e.g.:")
     print("                     s -b 00000040#E803401F08003F00")
     print()
     print("  Device commands (Canalyst-II direct):")
@@ -57,18 +57,19 @@ def print_help():
 
 running        = True
 device         = None
-vcan_bus       = None
+vcan_bus0      = None
+vcan_bus1      = None
 rx2_queue      = queue.Queue()
 monitoring_ch2 = threading.Event()
 
 def receive_ch0_loop():
-    """CAN1 → vcan0 (mirrors ch0_to_vcan0 in can-bridge.py)."""
+    """CAN1 → vcan0"""
     while running:
         msgs = device.receive(0)
         if msgs:
             for m in msgs:
                 try:
-                    vcan_bus.send(can.Message(
+                    vcan_bus0.send(can.Message(
                         arbitration_id=m.can_id,
                         data=bytes(m.data[:m.data_len]),
                         is_extended_id=bool(m.extended),
@@ -80,13 +81,13 @@ def receive_ch0_loop():
             time.sleep(0.01)
 
 def receive_ch1_loop():
-    """CAN2 → vcan0 + rx2_queue when monitoring (mirrors ch1_to_vcan1 in can-bridge.py)."""
+    """CAN2 → vcan1"""
     while running:
         msgs = device.receive(1)
         if msgs:
             for m in msgs:
                 try:
-                    vcan_bus.send(can.Message(
+                    vcan_bus1.send(can.Message(
                         arbitration_id=m.can_id,
                         data=bytes(m.data[:m.data_len]),
                         is_extended_id=bool(m.extended),
@@ -100,7 +101,8 @@ def receive_ch1_loop():
             time.sleep(0.01)
 
 try:
-    ensure_vcan0()
+    ensure_vcan('vcan0')
+    ensure_vcan('vcan1')
     try:
         device = CanalystDevice(device_index=0)
         device.init(0, bitrate=BITRATE)
@@ -109,7 +111,8 @@ try:
         print("Error: Canalyst-II not found — is the USB-CAN device plugged in?")
         print("       Run: lsusb | grep -i microchip")
         os._exit(1)
-    vcan_bus = can.Bus(interface='socketcan', channel='vcan0')
+    vcan_bus0 = can.Bus(interface='socketcan', channel='vcan0')
+    vcan_bus1 = can.Bus(interface='socketcan', channel='vcan1')
 
     threading.Thread(target=receive_ch0_loop, daemon=True).start()
     threading.Thread(target=receive_ch1_loop, daemon=True).start()
@@ -129,12 +132,22 @@ try:
             print_help()
 
         # ── monitor ──────────────────────────────────────────────────
-        elif cmd == 'm -b':
-            print("  Monitoring vcan0 — Ctrl+C to return to prompt.")
-            try:
-                subprocess.run(["candump", "vcan0"])
-            except KeyboardInterrupt:
-                print()
+        elif cmd.startswith('m -b'):
+            ch = cmd[4:].strip()
+            if ch in ('1', ''):
+                print("  Monitoring vcan0 (CAN1) — Ctrl+C to return to prompt.")
+                try:
+                    subprocess.run(["candump", "vcan0"])
+                except KeyboardInterrupt:
+                    print()
+            elif ch == '2':
+                print("  Monitoring vcan1 (CAN2) — Ctrl+C to return to prompt.")
+                try:
+                    subprocess.run(["candump", "vcan1"])
+                except KeyboardInterrupt:
+                    print()
+            else:
+                print("  Usage: m -b <1|2>")
 
         elif cmd.startswith('m -d '):
             ch = cmd[5:].strip()
@@ -148,7 +161,7 @@ try:
                 while not rx2_queue.empty():
                     rx2_queue.get_nowait()
                 monitoring_ch2.set()
-                print("  Monitoring CAN2 — Ctrl+C to return to prompt.")
+                print("  Monitoring CAN2 directly — Ctrl+C to return to prompt.")
                 try:
                     while True:
                         try:
@@ -194,8 +207,13 @@ except KeyboardInterrupt:
 finally:
     running = False
     try:
-        if vcan_bus:
-            vcan_bus.shutdown()
+        if vcan_bus0:
+            vcan_bus0.shutdown()
+    except Exception:
+        pass
+    try:
+        if vcan_bus1:
+            vcan_bus1.shutdown()
     except Exception:
         pass
     print("\nBridge stopped.", flush=True)
