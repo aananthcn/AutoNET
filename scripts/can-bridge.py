@@ -1,4 +1,5 @@
 import can
+import os
 import threading
 import subprocess
 from canalystii import CanalystDevice, Message as HWMessage
@@ -153,9 +154,15 @@ try:
         t.join()
 
 except KeyboardInterrupt:
-    running = False
     print("\n\nStopped.")
 finally:
-    if device:    device.__del__()
-    if vcan0_bus: vcan0_bus.shutdown()
-    if vcan1_bus: vcan1_bus.shutdown()
+    running = False
+    try:
+        if vcan0_bus: vcan0_bus.shutdown()
+    except Exception:
+        pass
+    try:
+        if vcan1_bus: vcan1_bus.shutdown()
+    except Exception:
+        pass
+    os._exit(0)

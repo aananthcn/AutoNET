@@ -2,6 +2,13 @@
 
 Reference guide for the CAN hardware adapters used with AutoNET.
 
+## Contents
+
+- [Waveshare USB-CAN-B](#waveshare-usb-can-b)
+- [Waveshare 2-Channel CAN FD HAT](#waveshare-2-channel-can-fd-hat)
+- [SmartElex 2-CH CAN HAT+](#smartelex-2-ch-can-hat)
+- [Device Comparison](#device-comparison)
+
 ---
 
 ## Waveshare USB-CAN-B
@@ -349,16 +356,175 @@ pinctrl get 13,22               # GPIO13 (INT_1) will show lo if MCP2515 stuck
 
 ---
 
+## Waveshare 2-Channel CAN FD HAT
+
+### Overview
+
+Dual-channel CAN FD expansion board for Raspberry Pi. Uses two MCP2518FD SPI CAN FD controllers (one per channel) connected to independent SPI buses (SPI0 and SPI1), exposing both as standard SocketCAN interfaces (`can0`, `can1`). Supports CAN FD data rates beyond the 1 Mbps limit of classic CAN 2.0.
+
+### Compatibility
+
+Raspberry Pi Zero / Zero W / Zero WH / 2B / 3B / 3B+ / 4B.
+
+> **Raspberry Pi 5 — NOT fully supported.**
+> Channel 0 (SPI0) works on Pi 5, but channel 1 (SPI1) fails due to the RP1 I/O chip breaking SPI1 auxiliary — same root cause as the SmartElex HAT. Use the **Waveshare USB-CAN-B** as a drop-in alternative on Pi 5.
+
+### Specifications
+
+| Property | Value |
+|---|---|
+| Channels | 2 (CAN0, CAN1) |
+| CAN controller | MCP2518FD × 2 (CAN FD + CAN 2.0B) |
+| CAN transceiver | Isolated |
+| Oscillator | 40 MHz |
+| SPI bus | SPI0 (CH0) + SPI1 (CH1) — independent mode |
+| Logic voltage | 3.3 V / 5 V (jumper selectable) |
+| Input power | 5 V from 40-pin header, or 8–28 V external terminal |
+| Isolation | 5 kV |
+| ESD protection | 500 W lightning surge protection per channel |
+| Terminal resistor | 120 Ω onboard per channel — enable via jumper cap |
+| Form factor | Standard HAT+ |
+
+### Interrupt and SPI Pin Mapping
+
+| Signal | BCM | Function |
+|---|---|---|
+| INT_0 | 25 | CAN0 interrupt |
+| INT_1 | 24 | CAN1 interrupt |
+| CS_0  | 8  | SPI0 CE0 (CAN0 chip select) |
+| CS_1  | 18 | SPI1 CE0 (CAN1 chip select) |
+
+---
+
+### Raspberry Pi Setup
+
+#### Step 1 — Hardware
+
+1. Power off the Pi.
+2. Align the HAT to the 40-pin GPIO header and press firmly.
+3. Enable the onboard 120 Ω terminal resistors with the jumper caps.
+4. Ensure the SPI mode jumper is set to **independent SPI** (two separate SPI buses, one per channel).
+
+#### Step 2 — Configure the device tree overlay
+
+```bash
+sudo vi /boot/firmware/config.txt
+```
+
+Add at the end of the `[all]` section:
+
+```
+dtparam=spi=on
+dtoverlay=spi1-3cs
+dtoverlay=mcp251xfd,spi0-0,oscillator=40000000,interrupt=25
+dtoverlay=mcp251xfd,spi1-0,oscillator=40000000,interrupt=24
+```
+
+Save and reboot:
+
+```bash
+sudo reboot
+```
+
+#### Step 3 — Verify MCP2518FD initialisation
+
+```bash
+dmesg | grep -i mcp
+```
+
+Expected output:
+
+```
+mcp251xfd spi0.0 can0: MCP2518FD rev0.0 (...) successfully initialized.
+mcp251xfd spi1.0 can1: MCP2518FD rev0.0 (...) successfully initialized.
+```
+
+#### Step 4 — Bring up CAN interfaces
+
+```bash
+sudo ip link set can0 up type can bitrate 500000
+sudo ip link set can1 up type can bitrate 500000
+ip link show type can
+```
+
+Both interfaces should show `state UP`.
+
+#### Step 5 — Make interfaces persistent across reboots
+
+Copy the network unit files from this repo and enable `systemd-networkd`:
+
+```bash
+scp config/systemd/can0.network config/systemd/can1.network aananth@192.168.10.10:~/
+ssh aananth@192.168.10.10 'sudo mv ~/can0.network ~/can1.network /etc/systemd/network/'
+sudo systemctl enable systemd-networkd
+sudo systemctl restart systemd-networkd
+```
+
+After this, `can0` and `can1` come up automatically at 500 kbps on every boot — no manual `ip link set` needed.
+
+#### Step 6 — Test (loopback with single HAT)
+
+Physically bridge the two channels: connect **CAN0_H → CAN1_H** and **CAN0_L → CAN1_L**, with 120 Ω termination at both ends.
+
+```bash
+# Terminal 1 — listen on CAN0
+candump can0
+
+# Terminal 2 — send from CAN1
+cansend can1 00000040#E803401F08003F00
+```
+
+You should see the frame appear in Terminal 1.
+
+#### Tear down
+
+```bash
+sudo ip link set can0 down
+sudo ip link set can1 down
+```
+
+To remove persistent bring-up:
+
+```bash
+sudo systemctl disable systemd-networkd
+sudo rm /etc/systemd/network/can0.network /etc/systemd/network/can1.network
+```
+
+---
+
+### Troubleshooting
+
+#### `Failed to read Oscillator Configuration Register (osc=0x00000000)`
+
+SPI communication is returning all zeros — the driver cannot reach the chip. Likely causes:
+
+- **Pi 5**: SPI1 is broken on Pi 5 (RP1 issue) — channel 1 will always fail. Use Pi 4B.
+- **Wrong oscillator value**: Must be `oscillator=40000000` (40 MHz). Default is 20 MHz and will cause probe failure.
+- **HAT not seated**: Re-seat the HAT on the GPIO header and reboot.
+
+#### `mcp251xfd spi1.0: error -ENODEV`
+
+Same as above — SPI returning zeros means no communication with the chip.
+
+#### `can1: state DOWN` with `NO-CARRIER`
+
+Normal when nothing is physically connected to CAN1. Connect loopback wires or a real CAN bus node and the state will update to `UP`.
+
+---
+
 ## Device Comparison
 
-| Feature | Waveshare USB-CAN-B | SmartElex 2-CH CAN HAT+ |
-|---|---|---|
-| Form factor | USB dongle (connects to any PC) | Raspberry Pi HAT |
-| Channels | 2 | 2 |
-| Isolation | 2500 VDC (full 3-terminal) | Power + signal isolation |
-| Linux interface | SocketCAN (`can0`/`can1`) | SocketCAN (`can0`/`can1`) |
-| Driver needed | None (gs_usb in kernel) | Device tree overlay (built-in kernel driver) |
-| Raspberry Pi 5 | ✓ Works (gs_usb, plug-and-play) | ✗ SPI1 broken on Pi 5 — pad rework needed for SPI0 |
-| Windows tool | USB-CAN TOOL V9.14 GUI | None (Linux only) |
-| Bitrate range | 10 Kbps – 1 Mbps | Up to 1 Mbps (MCP2515 limit) |
-| Best use | Desktop / laptop development host | Embedded Pi node on the vehicle bus |
+| Feature | Waveshare USB-CAN-B | Waveshare 2-CH CAN FD HAT | SmartElex 2-CH CAN HAT+ |
+|---|---|---|---|
+| Form factor | USB dongle (connects to any PC) | Raspberry Pi HAT | Raspberry Pi HAT |
+| Channels | 2 | 2 | 2 |
+| CAN standard | CAN 2.0A/B | CAN FD + CAN 2.0B | CAN 2.0B |
+| Controller | Microchip 32-bit MIPS | MCP2518FD × 2 | MCP2515 × 2 |
+| Isolation | 2500 VDC (full 3-terminal) | 5 kV | Power + signal isolation |
+| Linux interface | SocketCAN (`can0`/`can1`) | SocketCAN (`can0`/`can1`) | SocketCAN (`can0`/`can1`) |
+| Driver needed | None (gs_usb in kernel) | Device tree overlay (`mcp251xfd`) | Device tree overlay (`mcp251x`) |
+| Raspberry Pi 5 | ✓ Works (plug-and-play) | ✗ CH1 (SPI1) broken on Pi 5 | ✗ SPI1 broken on Pi 5 |
+| Persistent setup | Not needed (USB auto-detected) | `systemd-networkd` unit files | `systemd-networkd` unit files |
+| Windows tool | USB-CAN TOOL V9.14 GUI | None (Linux only) | None (Linux only) |
+| Bitrate range | 10 Kbps – 1 Mbps | Up to 8 Mbps (CAN FD) | Up to 1 Mbps |
+| Best use | Desktop / laptop development host | Embedded Pi node (CAN FD capable) | Embedded Pi node (CAN 2.0 only) |
