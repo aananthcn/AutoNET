@@ -1,0 +1,10 @@
+{
+  "description": "Basic cluster UI test — all 4 AutoNET messages at typical automotive rates",
+  "interface": "vcan0",
+  "messages": [
+    { "name": "DrivetrainStatus", "frame_id": "0x40", "period_ms": 10,   "description": "Speed, RPM, Gear, Throttle" },
+    { "name": "EngineHealth",     "frame_id": "0x41", "period_ms": 100,  "description": "Coolant, Oil, Battery, Load" },
+    { "name": "FuelRange",        "frame_id": "0x42", "period_ms": 1000, "description": "Fuel level and range" },
+    { "name": "VehicleStatus",    "frame_id": "0x43", "period_ms": 100,  "description": "Indicator and warning flags" }
+  ]
+}

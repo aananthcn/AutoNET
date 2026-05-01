@@ -20,12 +20,21 @@ AutoNET/
 ├── CLAUDE.md                        # This file
 ├── ARCHITECTURE.md                  # CAN network design — ECUs, message frames, signal tables
 ├── DEVICES.md                       # Hardware adapter setup (USB-CAN-B, SmartElex HAT+, Canalyst-II)
+├── config/
+│   └── systemd/
+│       ├── can0.network             # systemd-networkd unit — brings up can0 at boot
+│       └── can1.network             # systemd-networkd unit — brings up can1 at boot
 ├── networks/
 │   └── CAN/
 │       └── AutoNET.dbc              # CAN database — all message frames & signals
-└── scripts/
-    ├── can-bridge.py                # Full bridge: vcan0/1 <=> Canalyst-II CAN1/2
-    └── can-test.py                  # Interactive tool: bridge + direct device send/monitor
+├── scripts/
+│   ├── can-bridge.py                # Full bridge: vcan0/1 <=> Canalyst-II CAN1/2
+│   └── can-test.py                  # Interactive tool: bridge + direct device send/monitor
+└── simulator/
+    ├── can-sim.py                   # CAN simulator — sends DBC-encoded frames with varying data
+    └── usecases/
+        ├── basic_cluster_ui.json   # Use-case: all 4 AutoNET messages at automotive rates
+        └── rvc_usecase.json        # Use-case: normal driving → reverse gear cycle (RVC test)
 ```
 
 ---
@@ -79,7 +88,7 @@ sudo apt install -y can-utils python3-pip git cmake ninja-build \
 ### Python packages
 
 ```bash
-pip3 install python-can canalystii
+pip3 install python-can canalystii cantools
 ```
 
 ### Kernel module
@@ -165,6 +174,80 @@ while True:
         pass
 EOF
 ```
+
+### CAN Simulator
+
+`can-sim.py` generates realistic varying signal values from a DBC file and sends encoded CAN frames at configurable periodicities. It is the primary tool for driving a cluster display or any CAN receiver with live-looking data.
+
+#### Usage
+
+```bash
+# Send all DBC messages on vcan0 at 100 ms default period
+python3 simulator/can-sim.py --dbcfile networks/CAN/AutoNET.dbc
+
+# Use a specific use-case config (recommended)
+python3 simulator/can-sim.py \
+    --dbcfile networks/CAN/AutoNET.dbc \
+    --usecase simulator/usecases/basic_cluster_ui.json
+```
+
+#### Use-case JSON format
+
+Use-case files live in `simulator/usecases/`. Each file specifies which messages to send, at what rate, and on which interface:
+
+```json
+{
+  "description": "...",
+  "interface": "vcan0",
+  "messages": [
+    { "name": "DrivetrainStatus", "frame_id": "0x40", "period_ms": 10   },
+    { "name": "EngineHealth",     "frame_id": "0x41", "period_ms": 100  },
+    { "name": "FuelRange",        "frame_id": "0x42", "period_ms": 1000 },
+    { "name": "VehicleStatus",    "frame_id": "0x43", "period_ms": 100  }
+  ]
+}
+```
+
+Fields `name` and `frame_id` are both optional but at least one must be present. `interface` can be overridden per message.
+
+#### Signal value generation rules
+
+| Signal type | Generation strategy |
+|---|---|
+| Enum (choices list) | Random pick from defined values; changes every 10–50 ticks |
+| Boolean (2 choices) | 90 % probability of the lower / "normal" state (off/closed/ok) |
+| Continuous (min/max) | Sinusoidal oscillation within ±30 % of mid-range; unique frequency per signal |
+| Float scale (e.g. ×0.1) | Returns `float`; integer scale returns `int` |
+
+Factor and offset from the DBC are applied automatically by `cantools` during encoding.
+
+#### Scenario support
+
+A use-case JSON may include an optional `scenario` block that sequences signal overrides across timed phases:
+
+```json
+"scenario": {
+  "description": "...",
+  "cyclic": true,
+  "phases": [
+    { "name": "normal_driving", "description": "...", "duration_s": 4 },
+    { "name": "reverse",        "description": "...", "duration_s": 15,
+      "signal_overrides": { "DrivetrainStatus": { "Gear": "REVERSE" } } }
+  ]
+}
+```
+
+- `signal_overrides` maps message name → signal name → fixed physical value or choice string
+- Signals not listed in `signal_overrides` continue to be generated normally
+- Phase transitions are printed to stdout as they occur
+- `cyclic: true` repeats the phase sequence indefinitely
+
+#### Extending the simulator
+
+- Add new use-case JSON files under `simulator/usecases/` for different test scenarios
+- Future network simulators follow the same naming pattern: `eth-sim.py`, `grpc-sim.py`, etc.
+
+---
 
 ### Tear down
 

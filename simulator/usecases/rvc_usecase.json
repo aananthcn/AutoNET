@@ -1,0 +1,31 @@
+{
+  "description": "Rear View Camera use-case: normal driving for 4 s, reverse gear for 15 s, cyclic",
+  "interface": "vcan0",
+  "messages": [
+    { "name": "DrivetrainStatus", "frame_id": "0x40", "period_ms": 10,   "description": "Speed, RPM, Gear, Throttle" },
+    { "name": "EngineHealth",     "frame_id": "0x41", "period_ms": 100,  "description": "Coolant, Oil, Battery, Load" },
+    { "name": "FuelRange",        "frame_id": "0x42", "period_ms": 1000, "description": "Fuel level and range" },
+    { "name": "VehicleStatus",    "frame_id": "0x43", "period_ms": 100,  "description": "Indicator and warning flags" }
+  ],
+  "scenario": {
+    "description": "Cycles between normal driving and reverse to trigger RVC activation",
+    "cyclic": true,
+    "phases": [
+      {
+        "name": "normal_driving",
+        "description": "All signals generated freely — simulates forward driving",
+        "duration_s": 4
+      },
+      {
+        "name": "reverse",
+        "description": "Gear locked to REVERSE for RVC activation window",
+        "duration_s": 15,
+        "signal_overrides": {
+          "DrivetrainStatus": {
+            "Gear": "REVERSE"
+          }
+        }
+      }
+    ]
+  }
+}
